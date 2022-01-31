@@ -1,0 +1,183 @@
+---
+title: Exploring Census Household Pulse Survey Part 1
+author: 'Adam Bibler'
+date: '2022-01-30'
+slug: exploring-census-household-pulse-survey-part-1
+categories: []
+tags: []
+subtitle: ''
+summary: ''
+authors: []
+lastmod: '2022-01-30T21:35:50-05:00'
+featured: no
+image:
+  caption: ''
+  focal_point: ''
+  preview_only: no
+projects: []
+---
+
+<script src="{{< blogdown/postref >}}index_files/header-attrs/header-attrs.js"></script>
+
+
+<div id="background" class="section level2">
+<h2>Background</h2>
+<p>The Census Bureau began the Household Pulse Survey to measure the impacts of the Coronavirus Pandemic on the U.S. Household Population.</p>
+</div>
+<div id="getting-the-data" class="section level2">
+<h2>Getting the data</h2>
+<p>This analysis will be based around using the Public Use File (PUF). The PUF contains the person-level responses to the survey and can be used to produce custom estimates. The PUFs for each week are published at <a href="https://www.census.gov/programs-surveys/household-pulse-survey/datasets.html" class="uri">https://www.census.gov/programs-surveys/household-pulse-survey/datasets.html</a>.</p>
+<p>The code below will download and unzip the data.</p>
+<pre class="r"><code>icesTAF::mkdir(&quot;Data&quot;)
+download.file(&quot;https://www2.census.gov/programs-surveys/demo/datasets/hhp/2020/wk1/HPS_Week01_PUF_CSV.zip&quot;, &quot;Data/HPS_Week01_PUF_CSV.zip&quot;)
+
+unzip(&quot;Data/HPS_Week01_PUF_CSV.zip&quot;, exdir = &quot;Data/HPS_Week01_PUF_CSV&quot;)</code></pre>
+</div>
+<div id="working-with-the-data" class="section level2">
+<h2>Working with the data</h2>
+<pre class="r"><code>library(forcats)
+library(srvyr)
+library(tidyverse)</code></pre>
+<p>First, we read in the PUF.</p>
+<pre class="r"><code>puf &lt;- read_csv(file = &quot;Data/HPS_Week01_PUF_CSV/pulse2020_puf_01.csv&quot;)</code></pre>
+<p>The PUF contains the PWEIGHT variable to produce (weighted) estimates. In order to calculate standard errors though, we also need the “Replicate Weights” file, attaching it to the PUF.</p>
+<pre class="r"><code>repweights &lt;- read_csv(file = &quot;Data/HPS_Week01_PUF_CSV/pulse2020_repwgt_puf_01.csv&quot;)
+puf_w_weights &lt;- inner_join(puf, repweights, by = c(&quot;SCRAM&quot;,&quot;WEEK&quot;))</code></pre>
+<p>Now, we convert data frame to survey object. Allows for calculating summary statistics without re-specifying the weight each time.</p>
+<pre class="r"><code>wgts &lt;- colnames(repweights)[3:length(colnames(repweights))]
+
+survey_puf &lt;- as_survey_rep(puf_w_weights, id = SCRAM, weights = PWEIGHT, 
+                            repweights = all_of(wgts), type = &quot;Fay&quot;, rho = 0.5005)</code></pre>
+<p>And now we should be all set to start analyzing the data. First, let’s make sure we know what we are doing by estimating something that already appears in the Detailed Tables. Specifically, we’ll look at the Housing 2b table. The table states that there are 8,918,242 persons in renter occupied housing units with No Confidence in the Ability to Pay Next Month’s Rent, 12,571,649 with slight confidence, and so on. We can replicate these numbers, adding the category IDs from the data</p>
+<pre class="r"><code>renters_payment_confidence &lt;- 
+survey_puf %&gt;% 
+  filter(WEEK == &quot;1&quot; &amp; TENURE == &quot;3&quot;) %&gt;% 
+  group_by(MORTCONF) %&gt;% 
+  survey_count() %&gt;%
+  mutate_if(is.numeric, round, digits = 0)
+
+renters_payment_confidence$MORTCONF &lt;- factor(renters_payment_confidence$MORTCONF, labels = 
+                         c( &quot;Question Seen But Category Not Collected&quot;,
+                            &quot;Missing / Did Not Report&quot;,
+                            &quot;No Confidence&quot;,
+                            &quot;Slight Confidence&quot;,
+                            &quot;Moderate Confidence&quot;,
+                            &quot;High Confidence&quot;,
+                            &quot;Payment Deferred&quot;))
+
+knitr::kable(renters_payment_confidence, format.args = list(big.mark = &quot;,&quot;))</code></pre>
+<table>
+<thead>
+<tr class="header">
+<th align="left">MORTCONF</th>
+<th align="right">n</th>
+<th align="right">n_se</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">Question Seen But Category Not Collected</td>
+<td align="right">170,927</td>
+<td align="right">61,811</td>
+</tr>
+<tr class="even">
+<td align="left">Missing / Did Not Report</td>
+<td align="right">153,139</td>
+<td align="right">37,374</td>
+</tr>
+<tr class="odd">
+<td align="left">No Confidence</td>
+<td align="right">8,918,242</td>
+<td align="right">377,552</td>
+</tr>
+<tr class="even">
+<td align="left">Slight Confidence</td>
+<td align="right">12,571,649</td>
+<td align="right">374,676</td>
+</tr>
+<tr class="odd">
+<td align="left">Moderate Confidence</td>
+<td align="right">18,070,862</td>
+<td align="right">480,523</td>
+</tr>
+<tr class="even">
+<td align="left">High Confidence</td>
+<td align="right">30,643,777</td>
+<td align="right">609,009</td>
+</tr>
+<tr class="odd">
+<td align="left">Payment Deferred</td>
+<td align="right">938,815</td>
+<td align="right">153,909</td>
+</tr>
+</tbody>
+</table>
+<p>We see that we were able to successfully reproduce the estimates. However, the standard errors are slightly off.</p>
+<p>Now we can produce custom estimates. For example, the pulse asks respondents a series of questions about their mental health. Health Table 2a lists Symptoms of Anxiety By Selected Characteristics. However, the respondent’s housing situation is not one of the characteristics.</p>
+<p>Let’s look at the symptoms of anxiety for renters.</p>
+<pre class="r"><code>anxiety_for_all_renters &lt;- survey_puf %&gt;% 
+  filter(WEEK == &quot;1&quot; &amp; TENURE == &quot;3&quot;) %&gt;% 
+  group_by(ANXIOUS) %&gt;% 
+  summarise(proportion = survey_mean())
+
+anxiety_for_all_renters$Group &lt;- &quot;All Renters&quot;
+
+anxiety_for_renters_w_no_conf &lt;- survey_puf %&gt;% 
+  filter(  WEEK == &quot;1&quot; &amp; 
+           TENURE == &quot;3&quot; &amp; 
+           MORTCONF == &quot;1&quot; ) %&gt;% 
+  group_by(ANXIOUS) %&gt;% 
+  summarise(proportion = survey_mean())
+
+anxiety_for_renters_w_no_conf$Group &lt;- &quot;Renters With No Confidence 
+in Paying Next Month&#39;s Rent&quot;
+
+anxiety_for_renters &lt;- rbind(anxiety_for_all_renters, anxiety_for_renters_w_no_conf)
+
+anxiety_for_renters$ANXIOUS &lt;- factor(anxiety_for_renters$ANXIOUS, labels = c(&quot;Missing&quot;, 
+                                              &quot;Not at all&quot;,
+                                              &quot;Several days&quot;,
+                                              &quot;More than half the days&quot;,
+                                              &quot;Nearly every day&quot;))
+
+ggplot(anxiety_for_renters, aes(x = ANXIOUS, y = proportion, fill = Group)) +
+  geom_bar(stat = &quot;identity&quot;, position = &quot;dodge&quot;) +
+  theme(axis.text.x = element_text(angle = 45))</code></pre>
+<p><img src="{{< blogdown/postref >}}index_files/figure-html/unnamed-chunk-7-1.png" width="672" /></p>
+<p>As might be expected, renters who report not being confident in their ability to pay next month’s rent also report feeling anxious more often.</p>
+<p>One thing to note about the Pulse is that tenure (whether the home is owned or rented) is missing for a large number of the respondents.</p>
+<pre class="r"><code>tenure_w_missing &lt;- survey_puf %&gt;% 
+  filter(WEEK == &quot;1&quot;) %&gt;% 
+  group_by(TENURE) %&gt;% 
+  summarise(proportion = survey_mean())
+tenure_w_missing$TENURE &lt;- factor(tenure_w_missing$TENURE, labels = 
+                         c( &quot;Question Seen But Category Not Collected&quot;,
+                            &quot;Missing / Did Not Report&quot;,
+                            &quot;Owned free and clear&quot;,
+                            &quot;Owned with a mortgage&quot;,
+                            &quot;Rented&quot;,
+                            &quot;Occupied without payment of rent&quot;))
+
+tenure_w_missing</code></pre>
+<pre><code>## # A tibble: 6 x 3
+##   TENURE                                   proportion proportion_se
+##   &lt;fct&gt;                                         &lt;dbl&gt;         &lt;dbl&gt;
+## 1 Question Seen But Category Not Collected    0.00500      0.000452
+## 2 Missing / Did Not Report                    0.102        0.00222 
+## 3 Owned free and clear                        0.183        0.00303 
+## 4 Owned with a mortgage                       0.408        0.00309 
+## 5 Rented                                      0.287        0.00340 
+## 6 Occupied without payment of rent            0.0152       0.000982</code></pre>
+<pre class="r"><code>tenure_no_missing &lt;- survey_puf %&gt;% 
+  filter(WEEK == &quot;1&quot; &amp; TENURE != &quot;-88&quot; &amp; TENURE != &quot;-99&quot;) %&gt;% 
+  group_by(TENURE) %&gt;% 
+  summarise(proportion = survey_mean())
+tenure_no_missing</code></pre>
+<pre><code>## # A tibble: 4 x 3
+##   TENURE proportion proportion_se
+##    &lt;dbl&gt;      &lt;dbl&gt;         &lt;dbl&gt;
+## 1      1     0.205        0.00333
+## 2      2     0.457        0.00322
+## 3      3     0.321        0.00382
+## 4      4     0.0171       0.00109</code></pre>
+</div>
