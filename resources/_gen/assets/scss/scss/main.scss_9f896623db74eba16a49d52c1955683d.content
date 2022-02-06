@@ -5,6 +5,7 @@
  * Copyright 2011-2021 Twitter, Inc.
  * Licensed under MIT (https://github.com/twbs/bootstrap/blob/main/LICENSE)
  */
+@import url("https://fonts.googleapis.com/css?family=Open+Sans&display=swap");
 :root {
   --blue: #007bff;
   --indigo: #6610f2;
@@ -9556,3 +9557,12 @@ div.chart {
 
 .portrait-title h2 {
   font-size: 1.5rem; }
+
+p {
+  font-family: "Open Sans"; }
+
+h2 {
+  font-weight: bold; }
+
+.navbar-light .navbar-brand {
+  color: #F80; }

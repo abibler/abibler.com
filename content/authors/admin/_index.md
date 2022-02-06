@@ -28,6 +28,6 @@ social:
 superuser: true
 title: Adam Bibler
 ---
-I’m Adam, a housing policy expert with a passion for economic data, research, and new ideas. Currently I am the Director of the Program Parameters and Research Division in the Office of Policy Development & Research, US Department of Housing and Urban Development.
+I’m Adam, an economist with a passion for data, research, and new ideas. Currently I am the Director of the Program Parameters and Research Division in the Office of Policy Development & Research, US Department of Housing and Urban Development.
 
 

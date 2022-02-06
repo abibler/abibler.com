@@ -22,33 +22,35 @@ projects: []
 
 <div id="background" class="section level2">
 <h2>Background</h2>
-<p>The Census Bureau began the Household Pulse Survey to measure the impacts of the Coronavirus Pandemic on the U.S. Household Population.</p>
+<p>The Census Bureau began the Household Pulse Survey to measure the impacts of the Coronavirus Pandemic on the U.S. Household Population. This post will demonstrate some basics of downloading the data, getting it into R, and doing some simple analysis.</p>
+<p>Download this post as an R Markdown file <a href="https://github.com/abibler/Census_Household_Pulse">here</a>.</p>
 </div>
 <div id="getting-the-data" class="section level2">
 <h2>Getting the data</h2>
 <p>This analysis will be based around using the Public Use File (PUF). The PUF contains the person-level responses to the survey and can be used to produce custom estimates. The PUFs for each week are published at <a href="https://www.census.gov/programs-surveys/household-pulse-survey/datasets.html" class="uri">https://www.census.gov/programs-surveys/household-pulse-survey/datasets.html</a>.</p>
 <p>The code below will download and unzip the data.</p>
-<pre class="r"><code>icesTAF::mkdir(&quot;Data&quot;)
-download.file(&quot;https://www2.census.gov/programs-surveys/demo/datasets/hhp/2020/wk1/HPS_Week01_PUF_CSV.zip&quot;, &quot;Data/HPS_Week01_PUF_CSV.zip&quot;)
+<pre class="r"><code># icesTAF::mkdir(&quot;Data&quot;)
+# download.file(&quot;https://www2.census.gov/programs-surveys/demo/datasets/hhp/2020/wk1/HPS_Week01_PUF_CSV.zip&quot;, &quot;Data/HPS_Week01_PUF_CSV.zip&quot;)
 
-unzip(&quot;Data/HPS_Week01_PUF_CSV.zip&quot;, exdir = &quot;Data/HPS_Week01_PUF_CSV&quot;)</code></pre>
+# unzip(&quot;Data/HPS_Week01_PUF_CSV.zip&quot;, exdir = &quot;Data/HPS_Week01_PUF_CSV&quot;)</code></pre>
 </div>
 <div id="working-with-the-data" class="section level2">
 <h2>Working with the data</h2>
 <pre class="r"><code>library(forcats)
+library(scales)
 library(srvyr)
 library(tidyverse)</code></pre>
 <p>First, we read in the PUF.</p>
 <pre class="r"><code>puf &lt;- read_csv(file = &quot;Data/HPS_Week01_PUF_CSV/pulse2020_puf_01.csv&quot;)</code></pre>
-<p>The PUF contains the PWEIGHT variable to produce (weighted) estimates. In order to calculate standard errors though, we also need the “Replicate Weights” file, attaching it to the PUF.</p>
+<p>The PUF contains the <strong>PWEIGHT</strong> variable to produce (weighted) estimates. In order to calculate standard errors though, we also need the “Replicate Weights” file, attaching it to the PUF.</p>
 <pre class="r"><code>repweights &lt;- read_csv(file = &quot;Data/HPS_Week01_PUF_CSV/pulse2020_repwgt_puf_01.csv&quot;)
 puf_w_weights &lt;- inner_join(puf, repweights, by = c(&quot;SCRAM&quot;,&quot;WEEK&quot;))</code></pre>
-<p>Now, we convert data frame to survey object. Allows for calculating summary statistics without re-specifying the weight each time.</p>
+<p>Now, we convert data frame to survey object. This allows for calculating summary statistics without re-specifying the weight each time.</p>
 <pre class="r"><code>wgts &lt;- colnames(repweights)[3:length(colnames(repweights))]
 
 survey_puf &lt;- as_survey_rep(puf_w_weights, id = SCRAM, weights = PWEIGHT, 
                             repweights = all_of(wgts), type = &quot;Fay&quot;, rho = 0.5005)</code></pre>
-<p>And now we should be all set to start analyzing the data. First, let’s make sure we know what we are doing by estimating something that already appears in the Detailed Tables. Specifically, we’ll look at the Housing 2b table. The table states that there are 8,918,242 persons in renter occupied housing units with No Confidence in the Ability to Pay Next Month’s Rent, 12,571,649 with slight confidence, and so on. We can replicate these numbers, adding the category IDs from the data</p>
+<p>And now we should be all set to start analyzing the data. First, let’s make sure we know what we are doing by estimating something that already appears in the Detailed Tables. Specifically, we’ll look at the <a href="https://www2.census.gov/programs-surveys/demo/tables/hhp/2020/wk1/housing2b_week1.xlsx">Housing 2b table</a>. The table states that there are <strong>8,918,242</strong> persons in renter occupied housing units with No Confidence in the Ability to Pay Next Month’s Rent, <strong>12,571,649</strong> with slight confidence, and so on. We can replicate these numbers, adding the category IDs from the data.</p>
 <pre class="r"><code>renters_payment_confidence &lt;- 
 survey_puf %&gt;% 
   filter(WEEK == &quot;1&quot; &amp; TENURE == &quot;3&quot;) %&gt;% 
@@ -112,8 +114,8 @@ knitr::kable(renters_payment_confidence, format.args = list(big.mark = &quot;,&q
 </tr>
 </tbody>
 </table>
-<p>We see that we were able to successfully reproduce the estimates. However, the standard errors are slightly off.</p>
-<p>Now we can produce custom estimates. For example, the pulse asks respondents a series of questions about their mental health. Health Table 2a lists Symptoms of Anxiety By Selected Characteristics. However, the respondent’s housing situation is not one of the characteristics.</p>
+<p>We see that we were able to successfully reproduce the estimates. However, the standard errors are slightly off. (If anyone knows why, please let me know.)</p>
+<p>Now we can produce custom estimates. For example, the pulse asks respondents a series of questions about their mental health. <a href="https://www2.census.gov/programs-surveys/demo/tables/hhp/2020/wk1/health2a_week1.xlsx">Health Table 2a</a> lists Symptoms of Anxiety By Selected Characteristics. However, the respondent’s housing situation is not one of the characteristics.</p>
 <p>Let’s look at the symptoms of anxiety for renters.</p>
 <pre class="r"><code>anxiety_for_all_renters &lt;- survey_puf %&gt;% 
   filter(WEEK == &quot;1&quot; &amp; TENURE == &quot;3&quot;) %&gt;% 
@@ -140,9 +142,16 @@ anxiety_for_renters$ANXIOUS &lt;- factor(anxiety_for_renters$ANXIOUS, labels = c
                                               &quot;More than half the days&quot;,
                                               &quot;Nearly every day&quot;))
 
+
 ggplot(anxiety_for_renters, aes(x = ANXIOUS, y = proportion, fill = Group)) +
   geom_bar(stat = &quot;identity&quot;, position = &quot;dodge&quot;) +
-  theme(axis.text.x = element_text(angle = 45))</code></pre>
+  theme(axis.text.x = element_text(angle = 45)) +
+  xlab(&quot;Over the last 7 days, how often have you been bothered by the
+       following problems: Feeling nervous, anxious, or on edge? Would you
+       say not at all, several days, more than half the days, or nearly every
+       day?&quot;) +
+  ylab(&quot;Share of Respondants&quot;) + 
+  scale_y_continuous(labels = scales::percent)</code></pre>
 <p><img src="{{< blogdown/postref >}}index_files/figure-html/unnamed-chunk-7-1.png" width="672" /></p>
 <p>As might be expected, renters who report not being confident in their ability to pay next month’s rent also report feeling anxious more often.</p>
 <p>One thing to note about the Pulse is that tenure (whether the home is owned or rented) is missing for a large number of the respondents.</p>
@@ -157,27 +166,37 @@ tenure_w_missing$TENURE &lt;- factor(tenure_w_missing$TENURE, labels =
                             &quot;Owned with a mortgage&quot;,
                             &quot;Rented&quot;,
                             &quot;Occupied without payment of rent&quot;))
+tenure_w_missing$proportion &lt;- scales::label_percent()(tenure_w_missing$proportion)
 
-tenure_w_missing</code></pre>
-<pre><code>## # A tibble: 6 x 3
-##   TENURE                                   proportion proportion_se
-##   &lt;fct&gt;                                         &lt;dbl&gt;         &lt;dbl&gt;
-## 1 Question Seen But Category Not Collected    0.00500      0.000452
-## 2 Missing / Did Not Report                    0.102        0.00222 
-## 3 Owned free and clear                        0.183        0.00303 
-## 4 Owned with a mortgage                       0.408        0.00309 
-## 5 Rented                                      0.287        0.00340 
-## 6 Occupied without payment of rent            0.0152       0.000982</code></pre>
+tenure_w_missing[,1:2]</code></pre>
+<pre><code>## # A tibble: 6 x 2
+##   TENURE                                   proportion
+##   &lt;fct&gt;                                    &lt;chr&gt;     
+## 1 Question Seen But Category Not Collected 0.5%      
+## 2 Missing / Did Not Report                 10.2%     
+## 3 Owned free and clear                     18.3%     
+## 4 Owned with a mortgage                    40.8%     
+## 5 Rented                                   28.7%     
+## 6 Occupied without payment of rent         1.5%</code></pre>
+<p>We can see from below that even though tenure is missing for a large share of respondants, the proportion of owners and renters appears in line with that reported in the <a href="https://data.census.gov/cedsci/table?q=b25003&amp;tid=ACSDT1Y2019.B25003">American Community Survey</a>.</p>
 <pre class="r"><code>tenure_no_missing &lt;- survey_puf %&gt;% 
   filter(WEEK == &quot;1&quot; &amp; TENURE != &quot;-88&quot; &amp; TENURE != &quot;-99&quot;) %&gt;% 
   group_by(TENURE) %&gt;% 
   summarise(proportion = survey_mean())
-tenure_no_missing</code></pre>
-<pre><code>## # A tibble: 4 x 3
-##   TENURE proportion proportion_se
-##    &lt;dbl&gt;      &lt;dbl&gt;         &lt;dbl&gt;
-## 1      1     0.205        0.00333
-## 2      2     0.457        0.00322
-## 3      3     0.321        0.00382
-## 4      4     0.0171       0.00109</code></pre>
+
+tenure_no_missing$TENURE &lt;- factor(tenure_no_missing$TENURE, labels = 
+                         c( &quot;Owned free and clear&quot;,
+                            &quot;Owned with a mortgage&quot;,
+                            &quot;Rented&quot;,
+                            &quot;Occupied without payment of rent&quot;))
+tenure_no_missing$proportion &lt;- scales::label_percent()(tenure_no_missing$proportion)
+
+tenure_no_missing[,1:2]</code></pre>
+<pre><code>## # A tibble: 4 x 2
+##   TENURE                           proportion
+##   &lt;fct&gt;                            &lt;chr&gt;     
+## 1 Owned free and clear             21%       
+## 2 Owned with a mortgage            46%       
+## 3 Rented                           32%       
+## 4 Occupied without payment of rent 2%</code></pre>
 </div>

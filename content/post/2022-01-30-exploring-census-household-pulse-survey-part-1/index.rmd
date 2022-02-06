@@ -24,7 +24,9 @@ knitr::opts_chunk$set(echo = TRUE, results='hide', message=FALSE, warning=FALSE)
 
 ## Background
 
-The Census Bureau began the Household Pulse Survey to measure the impacts of the Coronavirus Pandemic on the U.S. Household Population.
+The Census Bureau began the Household Pulse Survey to measure the impacts of the Coronavirus Pandemic on the U.S. Household Population. This post will demonstrate some basics of downloading the data, getting it into R, and doing some simple analysis.
+
+Download this post as an R Markdown file [here](https://github.com/abibler/Census_Household_Pulse).
 
 ## Getting the data
 
@@ -33,10 +35,10 @@ This analysis will be based around using the Public Use File (PUF). The PUF cont
 The code below will download and unzip the data.
 
 ```{r}
-icesTAF::mkdir("Data")
-download.file("https://www2.census.gov/programs-surveys/demo/datasets/hhp/2020/wk1/HPS_Week01_PUF_CSV.zip", "Data/HPS_Week01_PUF_CSV.zip")
+# icesTAF::mkdir("Data")
+# download.file("https://www2.census.gov/programs-surveys/demo/datasets/hhp/2020/wk1/HPS_Week01_PUF_CSV.zip", "Data/HPS_Week01_PUF_CSV.zip")
 
-unzip("Data/HPS_Week01_PUF_CSV.zip", exdir = "Data/HPS_Week01_PUF_CSV")
+# unzip("Data/HPS_Week01_PUF_CSV.zip", exdir = "Data/HPS_Week01_PUF_CSV")
 ```
 
 
@@ -44,6 +46,7 @@ unzip("Data/HPS_Week01_PUF_CSV.zip", exdir = "Data/HPS_Week01_PUF_CSV")
 
 ```{r}
 library(forcats)
+library(scales)
 library(srvyr)
 library(tidyverse)
 ```
@@ -54,14 +57,14 @@ First, we read in the PUF.
 puf <- read_csv(file = "Data/HPS_Week01_PUF_CSV/pulse2020_puf_01.csv")
 ```
 
-The PUF contains the PWEIGHT variable to produce (weighted) estimates. In order to calculate standard errors though, we also need the "Replicate Weights" file, attaching it to the PUF.
+The PUF contains the **PWEIGHT** variable to produce (weighted) estimates. In order to calculate standard errors though, we also need the "Replicate Weights" file, attaching it to the PUF.
 
 ``` {r}
 repweights <- read_csv(file = "Data/HPS_Week01_PUF_CSV/pulse2020_repwgt_puf_01.csv")
 puf_w_weights <- inner_join(puf, repweights, by = c("SCRAM","WEEK"))
 ```
 
-Now, we convert data frame to survey object. Allows for calculating summary statistics without re-specifying the weight each time.
+Now, we convert data frame to survey object. This allows for calculating summary statistics without re-specifying the weight each time.
 
 ```{r}
 wgts <- colnames(repweights)[3:length(colnames(repweights))]
@@ -70,7 +73,7 @@ survey_puf <- as_survey_rep(puf_w_weights, id = SCRAM, weights = PWEIGHT,
                             repweights = all_of(wgts), type = "Fay", rho = 0.5005)
 ```
 
-And now we should be all set to start analyzing the data. First, let's make sure we know what we are doing by estimating something that already appears in the Detailed Tables. Specifically, we'll look at the Housing 2b table. The table states that there are 8,918,242 persons in renter occupied housing units with No Confidence in the Ability to Pay Next Month's Rent, 12,571,649 with slight confidence, and so on. We can replicate these numbers, adding the category IDs from the data
+And now we should be all set to start analyzing the data. First, let's make sure we know what we are doing by estimating something that already appears in the Detailed Tables. Specifically, we'll look at the [Housing 2b table](https://www2.census.gov/programs-surveys/demo/tables/hhp/2020/wk1/housing2b_week1.xlsx). The table states that there are **8,918,242** persons in renter occupied housing units with No Confidence in the Ability to Pay Next Month's Rent, **12,571,649** with slight confidence, and so on. We can replicate these numbers, adding the category IDs from the data.
 
 ```{r, results= 'markup'}
 renters_payment_confidence <- 
@@ -91,9 +94,9 @@ renters_payment_confidence$MORTCONF <- factor(renters_payment_confidence$MORTCON
 
 knitr::kable(renters_payment_confidence, format.args = list(big.mark = ","))
 ```
-We see that we were able to successfully reproduce the estimates. However, the standard errors are slightly off. 
+We see that we were able to successfully reproduce the estimates. However, the standard errors are slightly off. (If anyone knows why, please let me know.) 
 
-Now we can produce custom estimates. For example, the pulse asks respondents a series of questions about their mental health. Health Table 2a lists Symptoms of Anxiety By Selected Characteristics. However, the respondent's housing situation is not one of the characteristics.
+Now we can produce custom estimates. For example, the pulse asks respondents a series of questions about their mental health. [Health Table 2a](https://www2.census.gov/programs-surveys/demo/tables/hhp/2020/wk1/health2a_week1.xlsx) lists Symptoms of Anxiety By Selected Characteristics. However, the respondent's housing situation is not one of the characteristics.
 
 Let's look at the symptoms of anxiety for renters.
 
@@ -123,9 +126,16 @@ anxiety_for_renters$ANXIOUS <- factor(anxiety_for_renters$ANXIOUS, labels = c("M
                                               "More than half the days",
                                               "Nearly every day"))
 
+
 ggplot(anxiety_for_renters, aes(x = ANXIOUS, y = proportion, fill = Group)) +
   geom_bar(stat = "identity", position = "dodge") +
-  theme(axis.text.x = element_text(angle = 45))
+  theme(axis.text.x = element_text(angle = 45)) +
+  xlab("Over the last 7 days, how often have you been bothered by the
+       following problems: Feeling nervous, anxious, or on edge? Would you
+       say not at all, several days, more than half the days, or nearly every
+       day?") +
+  ylab("Share of Respondants") + 
+  scale_y_continuous(labels = scales::percent)
 ```
 
 
@@ -146,14 +156,25 @@ tenure_w_missing$TENURE <- factor(tenure_w_missing$TENURE, labels =
                             "Owned with a mortgage",
                             "Rented",
                             "Occupied without payment of rent"))
+tenure_w_missing$proportion <- scales::label_percent()(tenure_w_missing$proportion)
 
-tenure_w_missing
+tenure_w_missing[,1:2]
 ```
+We can see from below that even though tenure is missing for a large share of respondants, the proportion of owners and renters appears in line with that reported in the [American Community Survey](https://data.census.gov/cedsci/table?q=b25003&tid=ACSDT1Y2019.B25003).  
+
 ```{r, results= 'markup'}
 tenure_no_missing <- survey_puf %>% 
   filter(WEEK == "1" & TENURE != "-88" & TENURE != "-99") %>% 
   group_by(TENURE) %>% 
   summarise(proportion = survey_mean())
-tenure_no_missing
+
+tenure_no_missing$TENURE <- factor(tenure_no_missing$TENURE, labels = 
+                         c( "Owned free and clear",
+                            "Owned with a mortgage",
+                            "Rented",
+                            "Occupied without payment of rent"))
+tenure_no_missing$proportion <- scales::label_percent()(tenure_no_missing$proportion)
+
+tenure_no_missing[,1:2]
 ```
 
