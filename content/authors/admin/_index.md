@@ -24,7 +24,7 @@ social:
   link: https://github.com/abibler
 - icon: linkedin
   icon_pack: fab
-  link: https://www.linkedin.com/
+  link: https://www.linkedin.com/in/adam-bibler-08a5996
 superuser: true
 title: Adam Bibler
 ---
