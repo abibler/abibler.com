@@ -74,4 +74,4 @@ us_fam_income <- get_ACS("B19113_001E","us",2005,2019,1)
 knitr::kable(us_fam_income)
 
 ```
-Note that the estimate value is being stored as a character variable. The Census uses character codes like "*" to indicate missing or topcoded valued. As is often the case, it is necessary to perform additional cleaning after retrieving the data.
+Note that the estimate value is being stored as a character variable. The Census uses character codes like "*" to indicate missing or topcoded values. As is often the case, it is necessary to perform additional cleaning after retrieving the data.
