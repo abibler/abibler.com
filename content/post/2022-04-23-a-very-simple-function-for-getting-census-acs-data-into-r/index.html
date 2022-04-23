@@ -1,0 +1,160 @@
+---
+title: A (Very) Simple Function for Getting Census ACS Data into R
+author: 'Adam Bibler'
+date: '2022-04-23'
+slug: a-very-simple-function-for-getting-census-acs-data-into-r
+categories: []
+tags: []
+subtitle: ''
+summary: ''
+authors: []
+lastmod: '2022-04-23T07:35:34-04:00'
+featured: no
+image:
+  caption: ''
+  focal_point: ''
+  preview_only: no
+projects: []
+---
+
+<script src="{{< blogdown/postref >}}index_files/header-attrs/header-attrs.js"></script>
+
+
+<style type="text/css">
+.caption {
+  font-size: 0.7rem;
+  font-style: italic;
+}
+</style>
+<p>The Census Bureau provides data to the public in a number of ways, the most direct way being through <a href="data.census.gov">data.census.gov</a>. While data.census.gov has improved since its initial launch, it is still frustrating and lacking in its ability to browse and download data. As one example, it seems that as of April 2022 the American Community Survey (ACS) estimates from 2005-2009 are not available.</p>
+<div class="figure">
+<img src="data.census.gov_screenshot1.jpg" alt="" />
+<p class="caption">The “Years” option only goes back to 2010</p>
+</div>
+<p>Fortunately, the Census Bureau also provides an API for more “sophisticated” users to query and download data. In this post, I share and demonstrate a simple function for downloading ACS data in R via the Census API. Note of course there are entire R packages that do this is as well, like <a href="https://cran.r-project.org/web/packages/acs/index.html">acs</a> and <a href="https://walker-data.com/tidycensus/">tidycensus</a>. However, if I simply want to grab some data I find this simple function is sufficient.</p>
+<pre class="r"><code>library(janitor)
+library(jsonlite)
+library(tidyverse)
+
+
+get_ACS &lt;- function(vars, geo, start_year, stop_year, vintage) {
+  
+  out_tibble &lt;- tibble()
+  
+  years &lt;- seq(from = start_year, to = stop_year)
+  
+  for (year in years) {
+    query &lt;- paste0(&quot;https://api.census.gov/data/&quot;,
+                    year,
+                    &quot;/acs/acs&quot;,
+                    vintage,
+                    &quot;?get=&quot;,
+                    vars,
+                    &quot;&amp;for=&quot;,
+                    geo)
+    myJSON &lt;- fromJSON(query)
+    myTibble &lt;- as_tibble(myJSON, name_repail = &quot;minimal&quot;)
+    myTibble &lt;- janitor::row_to_names(myTibble,1)
+    myTibble &lt;- myTibble %&gt;% mutate(year = year)
+    
+    out_tibble &lt;- rbind(out_tibble, myTibble)
+  }
+  
+  return(out_tibble)
+}</code></pre>
+<p>Having defined the function we can now use it! Let’s get the estimate of Median Family Income in the United States (Table B19113<a href="#fn1" class="footnote-ref" id="fnref1"><sup>1</sup></a>) from 2005-2019.</p>
+<pre class="r"><code>us_fam_income &lt;- get_ACS(&quot;B19113_001E&quot;,&quot;us&quot;,2005,2019,1)
+knitr::kable(us_fam_income)</code></pre>
+<table>
+<thead>
+<tr class="header">
+<th align="left">B19113_001E</th>
+<th align="left">us</th>
+<th align="right">year</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td align="left">55832</td>
+<td align="left">1</td>
+<td align="right">2005</td>
+</tr>
+<tr class="even">
+<td align="left">58526</td>
+<td align="left">1</td>
+<td align="right">2006</td>
+</tr>
+<tr class="odd">
+<td align="left">61173</td>
+<td align="left">1</td>
+<td align="right">2007</td>
+</tr>
+<tr class="even">
+<td align="left">63366</td>
+<td align="left">1</td>
+<td align="right">2008</td>
+</tr>
+<tr class="odd">
+<td align="left">61082</td>
+<td align="left">1</td>
+<td align="right">2009</td>
+</tr>
+<tr class="even">
+<td align="left">60609</td>
+<td align="left">1</td>
+<td align="right">2010</td>
+</tr>
+<tr class="odd">
+<td align="left">61455</td>
+<td align="left">1</td>
+<td align="right">2011</td>
+</tr>
+<tr class="even">
+<td align="left">62527</td>
+<td align="left">1</td>
+<td align="right">2012</td>
+</tr>
+<tr class="odd">
+<td align="left">64030</td>
+<td align="left">1</td>
+<td align="right">2013</td>
+</tr>
+<tr class="even">
+<td align="left">65910</td>
+<td align="left">1</td>
+<td align="right">2014</td>
+</tr>
+<tr class="odd">
+<td align="left">68260</td>
+<td align="left">1</td>
+<td align="right">2015</td>
+</tr>
+<tr class="even">
+<td align="left">71062</td>
+<td align="left">1</td>
+<td align="right">2016</td>
+</tr>
+<tr class="odd">
+<td align="left">73891</td>
+<td align="left">1</td>
+<td align="right">2017</td>
+</tr>
+<tr class="even">
+<td align="left">76401</td>
+<td align="left">1</td>
+<td align="right">2018</td>
+</tr>
+<tr class="odd">
+<td align="left">80944</td>
+<td align="left">1</td>
+<td align="right">2019</td>
+</tr>
+</tbody>
+</table>
+<p>Note that the estimate value is being stored as a character variable. The Census uses character codes like “*” to indicate missing or topcoded valued. As is often the case, it is necessary to perform additional cleaning after retrieving the data.</p>
+<div class="footnotes">
+<hr />
+<ol>
+<li id="fn1"><p>For a list of these table codes, see <a href="https://api.census.gov/data/2019/acs/acs5/groups.html">here</a><a href="#fnref1" class="footnote-back">↩︎</a></p></li>
+</ol>
+</div>
