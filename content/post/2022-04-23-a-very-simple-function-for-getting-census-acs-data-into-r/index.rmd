@@ -18,10 +18,7 @@ projects: []
 ---
 
 ```{css, echo=FALSE}
-.caption {
-  font-size: 0.7rem;
-  font-style: italic;
-}
+
 ```
 
 ```{r setup, include=FALSE}
