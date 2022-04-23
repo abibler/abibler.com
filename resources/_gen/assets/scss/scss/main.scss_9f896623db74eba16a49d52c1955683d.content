@@ -9570,3 +9570,6 @@ h2 {
 .caption {
   font-size: 0.7rem;
   font-style: italic; }
+
+.footnotes {
+  font-size: 0.8rem; }
