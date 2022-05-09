@@ -22,3 +22,6 @@ features = ["page builder", "widgets", "color themes", "dark mode", "customizabl
 [author]
   name = "George Cushen"
   homepage = "https://georgecushen.com"
+
+[params]
+    primaryColor = "#54B689"
