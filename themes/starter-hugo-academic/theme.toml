@@ -49,6 +49,7 @@ features = ["page builder", "widgets", "themes", "search", "research publication
   homepage = ""
   repo = ""
 
+primary = "#f59542"
 [light]
 	# Primary
 	primary = "#f59542"
