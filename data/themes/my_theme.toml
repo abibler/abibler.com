@@ -1,5 +1,6 @@
 # Theme metadata
-name = "Minimal"
+name = "my_theme"
+primary = "#34495e"
 
 [light]
   # Primary
