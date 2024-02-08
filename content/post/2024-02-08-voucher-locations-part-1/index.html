@@ -1,0 +1,184 @@
+---
+title: Voucher Locations Part 1
+author: ''
+date: '2024-02-08'
+slug: voucher-locations-part-1
+categories: []
+tags: []
+subtitle: ''
+summary: ''
+authors: []
+lastmod: '2024-02-08T10:50:45-05:00'
+featured: no
+image:
+  caption: ''
+  focal_point: ''
+  preview_only: no
+projects: []
+---
+
+
+
+<div id="background" class="section level2">
+<h2>Background</h2>
+<p>The Housing Choice Voucher program is the United States’s largest rental assistance program, providing rental subsidies to over 2.3 million households.</p>
+</div>
+<div id="location-of-voucher-households" class="section level2">
+<h2>Location of Voucher Households</h2>
+<p>HUD provides geographic data on its assisted households in a variety of ways. HUD’s enterprise GIS service provides voucher locations by <a href="https://hudgis-hud.opendata.arcgis.com/datasets/8d45c34f7f64433586ef6a448d00ca12_17/explore?location=37.982646%2C-112.717602%2C4.58">Census tract</a>. HUD also provides data on Housing Choice Voucher households (and households in its other direct rental assistance programs) through an annual data set known as the ‘<a href="https://www.huduser.gov/portal/datasets/assthsg.html">Picture of Subsidized Households</a>.’ For this analysis we’ll look at the Picture data at the state level.</p>
+<p>First we’ll want to set up our necessary packages.</p>
+<pre class="r"><code># set libraries
+library(httr)
+library(readxl)
+library(rjson)
+library(tidycensus)
+library(tidyverse)
+library(tigris)
+#</code></pre>
+<p>Next, we’ll download the Picture data.</p>
+<pre class="r"><code># # Download Picture of Subsidized Household Data
+# # icesTAF::mkdir(&quot;Data&quot;)
+# # download.file(&quot;https://www.huduser.gov/portal/datasets/pictures/files/STATE_2023_2020census.xlsx&quot;, &quot;Data/STATE_2023_2020census.xlsx&quot;, mode = &quot;wb&quot;)
+#</code></pre>
+<p>Then, we’ll read the data in to R and examine it.</p>
+<pre class="r"><code>#Read in picture data
+state_picture &lt;- read_excel(&quot;Data/STATE_2023_2020census.xlsx&quot;)
+
+#Filter the data to only by the HCV program
+vouchers_state &lt;- state_picture %&gt;% filter (program_label == &quot;Housing Choice Vouchers&quot;)
+
+#Look at states with the most and least vouchers
+vouchers_state &lt;- vouchers_state %&gt;% arrange(desc(number_reported))
+head(vouchers_state$States)</code></pre>
+<pre><code>## [1] &quot;CA California&quot;    &quot;NY New York&quot;      &quot;TX Texas&quot;         &quot;FL Florida&quot;      
+## [5] &quot;IL Illinois&quot;      &quot;MA Massachusetts&quot;</code></pre>
+<pre class="r"><code>tail(vouchers_state$States)</code></pre>
+<pre><code>## [1] &quot;DE Delaware&quot;                 &quot;AK Alaska&quot;                  
+## [3] &quot;WY Wyoming&quot;                  &quot;GU Guam&quot;                    
+## [5] &quot;VI U.S. Virgin Islands&quot;      &quot;MP Northern Mariana Islands&quot;</code></pre>
+<p>Not surprisingly, California, New York, and Texas have the most voucher households as these states are the most populous. However, the relationship between vouchers and population isn’t <em>quite</em> perfect, as Texas (and Florida) actually have greater populations than New York. We can download population from the Census Bureau and attach it to the HUD data to examine this more closely.</p>
+<pre class="r"><code># Get population from the ACS, using the tidycensus package, including a shapefile for mapping
+state_population &lt;- get_acs(
+  geography = &quot;state&quot;,
+  variables = &quot;B01003_001&quot;,
+  year = 2022,
+  survey = &quot;acs1&quot;,
+  geometry = TRUE,
+  resolution = &quot;20m&quot;
+) %&gt;% shift_geometry()</code></pre>
+<pre><code>## 
+  |                                                                            
+  |                                                                      |   0%
+  |                                                                            
+  |======                                                                |   9%
+  |                                                                            
+  |=============                                                         |  19%
+  |                                                                            
+  |===================                                                   |  28%
+  |                                                                            
+  |========================                                              |  34%
+  |                                                                            
+  |=======================================                               |  56%
+  |                                                                            
+  |=================================================                     |  69%
+  |                                                                            
+  |================================================================      |  91%
+  |                                                                            
+  |======================================================================| 100%</code></pre>
+<pre class="r"><code># Attach the population the the Picture data
+vouchers_pop &lt;- inner_join(state_population, vouchers_state, by = c(&quot;GEOID&quot; = &quot;code&quot;))
+vouchers_pop &lt;- vouchers_pop %&gt;%  rename(vouchers = number_reported)
+
+# Plot the voucher data by state
+ggplot(data = vouchers_pop, aes(fill = vouchers)) +
+  geom_sf() +
+  labs(title = &quot;Vouchers By State&quot;,
+       caption = &quot;Source: HUD Picture of Subsidized Households&quot;) +
+  scale_fill_continuous(name = &quot;&quot;, label = scales::comma_format()) +
+  theme_void()</code></pre>
+<p><img src="{{< blogdown/postref >}}index_files/figure-html/unnamed-chunk-4-1.png" width="672" /></p>
+<pre class="r"><code>ggplot(vouchers_pop, aes(x=estimate, y=vouchers)) +
+  geom_text(label = vouchers_pop$State) +
+  geom_smooth(method=lm) +
+  labs(title = &quot;Population vs. Total Vouchers by State&quot;)</code></pre>
+<p><img src="{{< blogdown/postref >}}index_files/figure-html/unnamed-chunk-4-2.png" width="672" /></p>
+<pre class="r"><code>lmpop &lt;- lm(vouchers ~ estimate, data = vouchers_pop)
+summary(lmpop)</code></pre>
+<pre><code>## 
+## Call:
+## lm(formula = vouchers ~ estimate, data = vouchers_pop)
+## 
+## Residuals:
+##    Min     1Q Median     3Q    Max 
+## -60948  -8550   -155   5643  90054 
+## 
+## Coefficients:
+##               Estimate Std. Error t value Pr(&gt;|t|)    
+## (Intercept) -1.868e+03  3.923e+03  -0.476    0.636    
+## estimate     7.420e-03  4.023e-04  18.444   &lt;2e-16 ***
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+## 
+## Residual standard error: 21160 on 50 degrees of freedom
+## Multiple R-squared:  0.8719,	Adjusted R-squared:  0.8693 
+## F-statistic: 340.2 on 1 and 50 DF,  p-value: &lt; 2.2e-16</code></pre>
+<p>Even though population explains about 87% of the variation in Vouchers by State, we see that New York and Massachusetts for example are overrepresented while stats like Texas and Florida are underrepresented.</p>
+<p>Of course, Vouchers are not available to anyone but rather to low-income households. It is more likely that differences in low-income population sizes would explain differences in Voucher sizes better than overall population. We can get low-income population estimates from HUD’s Comprehensive Housing Affordability Strategy (CHAS) data.</p>
+<pre class="r"><code># Read in the CHAS data
+chas_states &lt;- read_csv(&quot;Data\\CHAS\\2005thru2009-040-csv\\table1.csv&quot;)
+
+#Calculate totals (Adding renters with and without conditions)
+chas_states &lt;-  chas_states %&gt;% mutate(
+  fips = substr(geoid, 8, 9),
+  Total_HHs_LE_30pct = T1_est77 + T1_est113,
+  Total_HHs_LE_30pct_moe = (T1_moe77^2 + T1_moe113^2)^.5,
+  Share_HHs_LE_30pct = Total_HHs_LE_30pct / T1_est75,
+  Total_HHs_LE_50pct = Total_HHs_LE_30pct + T1_est84 + T1_est120,
+  Total_HHs_LE_50pct_moe = (Total_HHs_LE_30pct_moe^2 + T1_moe84^2 + T1_moe120^2)^.5,
+  Share_HHs_LE_50pct = Total_HHs_LE_50pct / T1_est75,
+  Share_HHs_LE_50pct_moe = Total_HHs_LE_50pct_moe / T1_est1,
+  Total_HHs_LE_80pct = Total_HHs_LE_50pct + T1_est91 + T1_est127,
+  Share_HHs_LE_80pct = Total_HHs_LE_80pct / T1_est75)
+
+# Attache the CHAS data to the population and Voucher data
+pop_program &lt;- inner_join(vouchers_pop, chas_states, by = c(&quot;GEOID&quot; = &quot;ST&quot;))
+
+lm_vli &lt;- lm(vouchers ~ Total_HHs_LE_80pct, data = pop_program)
+summary(lm_vli)</code></pre>
+<pre><code>## 
+## Call:
+## lm(formula = vouchers ~ Total_HHs_LE_80pct, data = pop_program)
+## 
+## Residuals:
+##    Min     1Q Median     3Q    Max 
+## -41785  -9400   1133   7250  66621 
+## 
+## Coefficients:
+##                      Estimate Std. Error t value Pr(&gt;|t|)    
+## (Intercept)        -6.276e+03  3.644e+03  -1.722   0.0912 .  
+## Total_HHs_LE_80pct  4.800e-02  2.305e-03  20.826   &lt;2e-16 ***
+## ---
+## Signif. codes:  0 &#39;***&#39; 0.001 &#39;**&#39; 0.01 &#39;*&#39; 0.05 &#39;.&#39; 0.1 &#39; &#39; 1
+## 
+## Residual standard error: 19000 on 50 degrees of freedom
+## Multiple R-squared:  0.8966,	Adjusted R-squared:  0.8946 
+## F-statistic: 433.7 on 1 and 50 DF,  p-value: &lt; 2.2e-16</code></pre>
+<pre class="r"><code>#Plot the relationship
+ggplot(pop_program, aes(x=Total_HHs_LE_80pct, y=vouchers)) +
+  geom_text(label = vouchers_pop$State) +
+  geom_smooth(method=lm) +
+  labs(title = &quot;Low Income Population vs. Total Vouchers by State&quot;)</code></pre>
+<p><img src="{{< blogdown/postref >}}index_files/figure-html/unnamed-chunk-5-1.png" width="672" /></p>
+<pre class="r"><code>pop_program &lt;- pop_program %&gt;% mutate(voucher_share_VLI = vouchers / Total_HHs_LE_50pct)
+
+ggplot(data = pop_program, aes(fill = voucher_share_VLI)) +
+  geom_sf() +
+  labs(title = &quot;Vouchers By State&quot;,
+       caption = &quot;Source: HUD Picture of Subsidized Households&quot;) +
+  scale_fill_continuous(name = &quot;&quot;, label = scales::comma_format()) +
+  theme_void()</code></pre>
+<p><img src="{{< blogdown/postref >}}index_files/figure-html/unnamed-chunk-5-2.png" width="672" /></p>
+<pre class="r"><code>summary(pop_program$voucher_share_VLI)</code></pre>
+<pre><code>##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+## 0.02770 0.04459 0.05174 0.06100 0.07199 0.17931</code></pre>
+</div>
