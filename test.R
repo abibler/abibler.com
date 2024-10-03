@@ -1,38 +1,3 @@
----
-title: Voucher Locations Part 1
-author: ''
-date: '2024-02-08'
-slug: voucher-locations-part-1
-categories: []
-tags: []
-subtitle: ''
-summary: ''
-authors: []
-lastmod: '2024-02-08T10:50:45-05:00'
-featured: no
-image:
-  caption: ''
-  focal_point: ''
-  preview_only: no
-projects: []
----
-
-
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, results='hide', message=FALSE, warning=FALSE)
-```
-
-## Background
-
-The Housing Choice Voucher program is the United States's largest rental assistance program, providing rental subsidies to over 2.3 million households.
-
-## Location of Voucher Households
-
-HUD provides geographic data on its assisted households in a variety of ways. HUD's enterprise GIS service provides voucher locations by [Census tract](https://hudgis-hud.opendata.arcgis.com/datasets/8d45c34f7f64433586ef6a448d00ca12_17/explore?location=37.982646%2C-112.717602%2C4.58). HUD also provides data on Housing Choice Voucher households (and households in its other direct rental assistance programs) through an annual data set known as the '[Picture of Subsidized Households](https://www.huduser.gov/portal/datasets/assthsg.html).' For this analysis we'll look at the Picture data at the state level. 
-
-First we'll want to set up our necessary packages.
-
-```{r, results= 'markup'}
 
 # set libraries
 library(httr)
@@ -43,20 +8,12 @@ library(tidycensus)
 library(tidyverse)
 library(tigris)
 #
-```
 
-Next, we'll download the Picture data.
-
-```{r, results= 'markup'}
 # # Download Picture of Subsidized Household Data
 # # icesTAF::mkdir("Data")
 # # download.file("https://www.huduser.gov/portal/datasets/pictures/files/STATE_2023_2020census.xlsx", "Data/STATE_2023_2020census.xlsx", mode = "wb")
 #
-```
 
-Then, we'll read the data in to R and examine it.
-
-```{r, results= 'markup'}
 #Read in picture data
 state_picture <- read_excel("Data/STATE_2023_2020census.xlsx")
 
@@ -67,11 +24,6 @@ vouchers_state <- state_picture %>% filter (program_label == "Housing Choice Vou
 vouchers_state <- vouchers_state %>% arrange(desc(number_reported))
 head(vouchers_state$States)
 tail(vouchers_state$States)
-```
-
-Not surprisingly, California, New York, and Texas have the most voucher households as these states are the most populous. However, the relationship between vouchers and population isn't *quite* perfect, as Texas (and Florida) actually have greater populations than New York. We can download population from the Census Bureau and attach it to the HUD data to examine this more closely.
-
-```{r}
 
 # Get population from the ACS, using the tidycensus package, including a shapefile for mapping
 state_population <- get_acs(
@@ -81,10 +33,9 @@ state_population <- get_acs(
   survey = "acs1",
   geometry = TRUE,
   resolution = "20m"
-) %>% shift_geometry()
-```
+) 
 
-```{r, results= 'markup'}
+
 # Attach the population the the Picture data
 vouchers_pop <- inner_join(state_population, vouchers_state, by = c("GEOID" = "code"))
 vouchers_pop <- vouchers_pop %>%  rename(vouchers = number_reported)
@@ -104,12 +55,7 @@ ggplot(vouchers_pop, aes(x=estimate, y=vouchers)) +
 
 lmpop <- lm(vouchers ~ estimate, data = vouchers_pop)
 summary(lmpop)
-```
-Even though population explains about 87% of the variation in Vouchers by State, we see that New York and Massachusetts for example are overrepresented while stats like Texas and Florida are underrepresented.
 
-Of course, Vouchers are not available to anyone but rather to low-income households. It is more likely that differences in low-income population sizes would explain differences in Voucher sizes better than overall population. We can get low-income population estimates from HUD's Comprehensive Housing Affordability Strategy (CHAS) data.
-
-```{r, results= 'markup'}
 
 # Read in the CHAS data
 chas_states <- read_csv("Data\\CHAS\\2005thru2009-040-csv\\table1.csv")
@@ -138,13 +84,7 @@ ggplot(pop_program, aes(x=Total_HHs_LE_80pct, y=vouchers)) +
   geom_text(label = vouchers_pop$State) +
   geom_smooth(method=lm) +
   labs(title = "Low Income Population vs. Total Vouchers by State")
-```
 
-It turns out that low-income renter population explains the variation in state vouchers only modestly more than overall population.
-
-We can also look at the share of the very low-income population receiving vouchers by state.
-
-```{r, results= 'markup'}
 pop_program <- pop_program %>% mutate(voucher_share_VLI = vouchers / Total_HHs_LE_50pct)
 
 ggplot(data = pop_program, aes(fill = voucher_share_VLI)) +
@@ -157,16 +97,23 @@ ggplot(data = pop_program, aes(fill = voucher_share_VLI)) +
 summary(pop_program$voucher_share_VLI)
 
 # Final Map
+library(sf)
+pop_program2 <- st_transform(pop_program, '+proj=longlat +datum=WGS84')
+
+quantile(pop_program$voucher_share_VLI, probs = c(0, 0.2, 0.4, 0.6, 0.8, 1), na.rm = T)
+mybins <- c(.027, .04, .06, .08, .1, .15, .18)
+
 mypalette <- colorNumeric( palette="Set3", domain=pop_program$voucher_share_VLI, na.color="transparent")
+mypalette <- colorBin("viridis", domain=pop_program$voucher_share_VLI, na.color="transparent", bins = mybins)
 
 mytext <- paste(
   "Area: ", pop_program$States,"<br/>", 
-  "Share: ", pop_program$voucher_share_VLI, "<br/>", 
+  "Share: ", pop_program$voucher_share_VLI,  
   sep="") %>%
   lapply(htmltools::HTML)
 
-m <- leaflet(pop_program) %>% 
-  setView( lat=40, lng= -100 , zoom = 1) %>%
+m <- leaflet(pop_program2) %>% 
+  setView( lat=40, lng= -100 , zoom = 5) %>%
   addPolygons( 
     stroke = TRUE, 
     fillColor = ~mypalette(voucher_share_VLI), 
@@ -186,5 +133,5 @@ m <- leaflet(pop_program) %>%
 
 #Show in viewer
 m  
-```
+
 

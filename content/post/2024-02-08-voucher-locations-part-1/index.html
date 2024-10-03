@@ -66,25 +66,6 @@ state_population &lt;- get_acs(
   geometry = TRUE,
   resolution = &quot;20m&quot;
 ) %&gt;% shift_geometry()</code></pre>
-<pre><code>## 
-  |                                                                            
-  |                                                                      |   0%
-  |                                                                            
-  |======                                                                |   9%
-  |                                                                            
-  |=============                                                         |  19%
-  |                                                                            
-  |===================                                                   |  28%
-  |                                                                            
-  |========================                                              |  34%
-  |                                                                            
-  |=======================================                               |  56%
-  |                                                                            
-  |=================================================                     |  69%
-  |                                                                            
-  |================================================================      |  91%
-  |                                                                            
-  |======================================================================| 100%</code></pre>
 <pre class="r"><code># Attach the population the the Picture data
 vouchers_pop &lt;- inner_join(state_population, vouchers_state, by = c(&quot;GEOID&quot; = &quot;code&quot;))
 vouchers_pop &lt;- vouchers_pop %&gt;%  rename(vouchers = number_reported)
@@ -96,12 +77,12 @@ ggplot(data = vouchers_pop, aes(fill = vouchers)) +
        caption = &quot;Source: HUD Picture of Subsidized Households&quot;) +
   scale_fill_continuous(name = &quot;&quot;, label = scales::comma_format()) +
   theme_void()</code></pre>
-<p><img src="{{< blogdown/postref >}}index_files/figure-html/unnamed-chunk-4-1.png" width="672" /></p>
+<p><img src="{{< blogdown/postref >}}index_files/figure-html/unnamed-chunk-5-1.png" width="672" /></p>
 <pre class="r"><code>ggplot(vouchers_pop, aes(x=estimate, y=vouchers)) +
   geom_text(label = vouchers_pop$State) +
   geom_smooth(method=lm) +
   labs(title = &quot;Population vs. Total Vouchers by State&quot;)</code></pre>
-<p><img src="{{< blogdown/postref >}}index_files/figure-html/unnamed-chunk-4-2.png" width="672" /></p>
+<p><img src="{{< blogdown/postref >}}index_files/figure-html/unnamed-chunk-5-2.png" width="672" /></p>
 <pre class="r"><code>lmpop &lt;- lm(vouchers ~ estimate, data = vouchers_pop)
 summary(lmpop)</code></pre>
 <pre><code>## 
@@ -168,7 +149,9 @@ ggplot(pop_program, aes(x=Total_HHs_LE_80pct, y=vouchers)) +
   geom_text(label = vouchers_pop$State) +
   geom_smooth(method=lm) +
   labs(title = &quot;Low Income Population vs. Total Vouchers by State&quot;)</code></pre>
-<p><img src="{{< blogdown/postref >}}index_files/figure-html/unnamed-chunk-5-1.png" width="672" /></p>
+<p><img src="{{< blogdown/postref >}}index_files/figure-html/unnamed-chunk-6-1.png" width="672" /></p>
+<p>It turns out that low-income renter population explains the variation in state vouchers only modestly more than overall population.</p>
+<p>We can also look at the share of the very low-income population receiving vouchers by state.</p>
 <pre class="r"><code>pop_program &lt;- pop_program %&gt;% mutate(voucher_share_VLI = vouchers / Total_HHs_LE_50pct)
 
 ggplot(data = pop_program, aes(fill = voucher_share_VLI)) +
@@ -177,7 +160,7 @@ ggplot(data = pop_program, aes(fill = voucher_share_VLI)) +
        caption = &quot;Source: HUD Picture of Subsidized Households&quot;) +
   scale_fill_continuous(name = &quot;&quot;, label = scales::comma_format()) +
   theme_void()</code></pre>
-<p><img src="{{< blogdown/postref >}}index_files/figure-html/unnamed-chunk-5-2.png" width="672" /></p>
+<p><img src="{{< blogdown/postref >}}index_files/figure-html/unnamed-chunk-7-1.png" width="672" /></p>
 <pre class="r"><code>summary(pop_program$voucher_share_VLI)</code></pre>
 <pre><code>##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
 ## 0.02770 0.04459 0.05174 0.06100 0.07199 0.17931</code></pre>
