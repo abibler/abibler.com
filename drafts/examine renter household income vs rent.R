@@ -47,5 +47,6 @@ x <- ggplot(df, aes(x = year, y = value)) +
         panel.grid.major.x = element_blank(),
         panel.grid.minor.x = element_blank(),
         plot.title = element_text(size = 18, face = "bold"))
+x
 ggsave("plot.jpg", width = 10)
 getwd()
