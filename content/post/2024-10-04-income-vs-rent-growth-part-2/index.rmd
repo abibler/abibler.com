@@ -1,0 +1,111 @@
+---
+title: Income vs. Rent Growth, Part 2
+author: Adam Bibler
+date: '2024-10-04'
+slug: income-vs-rent-growth-part-2
+categories: []
+tags: []
+subtitle: ''
+summary: ''
+authors: []
+lastmod: '2024-10-04T09:59:16-04:00'
+featured: no
+image:
+  caption: ''
+  focal_point: ''
+  preview_only: no
+projects: []
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, results='hide', message=FALSE, warning=FALSE)
+```
+
+```{r, include=FALSE}
+library(janitor)
+library(jsonlite)
+library(tidyverse)
+
+
+get_ACS <- function(vars, geo, start_year, stop_year, vintage) {
+  
+  out_tibble <- tibble()
+  
+  years <- seq(from = start_year, to = stop_year)
+  
+  for (year in years) {
+    query <- paste0("https://api.census.gov/data/",
+                    year,
+                    "/acs/acs",
+                    vintage,
+                    "?get=",
+                    vars,
+                    "&for=",
+                    geo)
+    myJSON <- fromJSON(query)
+    myTibble <- as_tibble(myJSON, name_repail = "minimal")
+    myTibble <- janitor::row_to_names(myTibble,1)
+    myTibble <- myTibble %>% mutate(year = year)
+    
+    out_tibble <- rbind(out_tibble, myTibble)
+  }
+  
+  return(out_tibble)
+}
+```
+In the previous post, I looked at median gross rent and median household income growth from 2005 - 2023 according to the American Community Survey. But that analysis was only at the national level. What about the state level? Let's find out.
+
+Again, I'll pull the median household income and median gross rent from the ACS. But this time I'll select states. Additionally, I'll switch to looking at median household income only for renter households. Finally, rather than looking at the full time series, I'll only pull the starting and ending years.
+
+```{r}
+state_hh_income <- get_ACS("NAME,B25119_003E","state",2005,2005,1)
+state_hh_income2 <- get_ACS("B25119_003E","state",2023,2023,1)
+
+state_hh_income$inc05 <- as.numeric(state_hh_income$B25119_003E)
+state_hh_income2$inc23 <- as.numeric(state_hh_income2$B25119_003E)
+
+state_hh_income <- cbind(state = state_hh_income$NAME,
+                         inc05 = state_hh_income$inc05,
+                         inc23 = state_hh_income2$inc23)
+
+state_hh_income <- as_tibble(state_hh_income)
+
+state_hh_income <- state_hh_income %>%
+  mutate(inc_growth = as.numeric(inc23) / as.numeric(inc05) - 1)
+
+
+state_hh_rent <- get_ACS("B25064_001E,NAME","state",2005,2005,1)
+state_hh_rent2 <- get_ACS("B25064_001E","state",2023,2023,1)
+state_hh_rent$rent05 <- as.numeric(state_hh_rent$B25064_001E)
+state_hh_rent2$rent23 <- as.numeric(state_hh_rent2$B25064_001E)
+state_hh_rent <- cbind(state = state_hh_rent$NAME,
+                       rent05 = state_hh_rent$rent05,
+                       rent23 = state_hh_rent2$rent23)
+state_hh_rent <- as_tibble(state_hh_rent)
+state_hh_rent <- state_hh_rent %>%
+  mutate(rent_growth = as.numeric(rent23) / as.numeric(rent05) - 1    
+  )
+
+state_income_rent <- merge(state_hh_income, state_hh_rent, by = "state")
+state_income_rent <- state_income_rent %>% 
+  mutate(diff = rent_growth - inc_growth)
+
+state_income_rent <- arrange(state_income_rent, desc(diff))
+state_income_rent2 <- state_income_rent %>% 
+  select(state, inc_growth, rent_growth, diff) %>% 
+  mutate(across(c("inc_growth", "rent_growth", "diff"), function(x) (paste0(round(x, 4) * 100,"%"))))
+```
+
+States with the largest difference: 
+
+```{r, results = "markup"}
+knitr::kable(head(state_income_rent2))
+```
+
+Arizona and Florida had some of the fastest rent growth post-Covid, so this makes sense.
+
+States with the smallest difference:
+
+```{r, results = "markup"}
+knitr::kable(tail(state_income_rent2))
+```
